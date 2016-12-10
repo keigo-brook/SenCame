@@ -14,6 +14,9 @@
 #include "math_utilities.h"
 #include <iostream>
 #include <signal.h>
+#include <stdlib.h>
+#include <string.h>
+
 
 using namespace qrk;
 using namespace std;
