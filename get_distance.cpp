@@ -13,10 +13,12 @@
 #include "Connection_information.h"
 #include "math_utilities.h"
 #include <iostream>
+#include <signal.h>
 
 using namespace qrk;
 using namespace std;
 
+Urg_driver urg;
 
 namespace
 {
@@ -37,27 +39,41 @@ namespace
     }
 }
 
+void handler(int s) {
+    cout << "stop: " << s << endl;
+    urg.stop_measurement();
+    urg.close();
+    exit(0);
+}
+
 
 int main(int argc, char *argv[])
 {
-    Connection_information information(argc, argv);
+    // Connection_information information(argc, argv);
 
     // \~japanese Ú‘±
     // \~english Connects to the sensor
-    Urg_driver urg;
-    if (!urg.open(information.device_or_ip_name(),
-                  information.baudrate_or_port_number(),
-                  information.connection_type())) {
-        cout << "Urg_driver::open(): "
-             << information.device_or_ip_name() << ": " << urg.what() << endl;
+    if (!urg.open("192.168.0.10", 10940, Urg_driver::Ethernet)) {
+        cout << "Urg_driver::open(): " << ": " << urg.what() << endl;
         return 1;
     }
 
+    int capture_times = 0, skip_scan = 0;
+    for (int i = 1; i < argc; ++i) {
+        if (!strcmp(argv[i], "-t")) {
+            capture_times = atoi(argv[i + 1]);
+        }
+        if (!strcmp(argv[i], "-s")) {
+            skip_scan = atoi(argv[i + 1]);
+        }
+    }
     // \~japanese ƒf[ƒ^Žæ“¾
     // \~english Gets measurement data
-    enum { Capture_times = 1200};
-    urg.start_measurement(Urg_driver::Distance, Urg_driver::Infinity_times, 0);
-    for (int i = 0; i < Capture_times; ++i) {
+    urg.start_measurement(Urg_driver::Distance, capture_times, skip_scan);
+    signal(SIGINT, handler);
+    int capture_count = 0;
+    while (true) {
+        if (capture_times > 0 && capture_count == capture_times) break;
         vector<long> data;
         long time_stamp = 0;
 
@@ -66,6 +82,9 @@ int main(int argc, char *argv[])
             return 1;
         }
         print_data(urg, data, time_stamp);
+        capture_count++;
     }
+    urg.stop_measurement();
+    urg.close();
     return 0;
 }
