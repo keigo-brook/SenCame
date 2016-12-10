@@ -14,7 +14,7 @@ struct Point2 {
 
 struct Human {
     missed: i32,
-    history: Vec<Point2>,
+    history: Vec<(i32, Point2)>,
     detected: bool,
 }
 
@@ -36,13 +36,13 @@ impl Human {
     }
 
     fn distance(&self, p: Point2) -> f32 {
-        let last_p = self.history.last().unwrap();
+        let last_p = self.history.last().unwrap().1;
         ((last_p.x - p.x) * (last_p.x - p.x) + (last_p.y - p.y) * (last_p.y - p.y)).sqrt()
     }
 
-    fn push_if_near(&mut self, p: Point2) -> bool {
+    fn push_if_near(&mut self, t: i32, p: Point2) -> bool {
         if self.near(p) {
-            self.history.push(p);
+            self.history.push((t, p));
             self.missed = 0;
             self.detected = true;
             true
@@ -52,43 +52,46 @@ impl Human {
     }
 
     fn in_area(&self) -> bool {
-        let last_p = self.history.last().unwrap();
+        let last_p = self.history.last().unwrap().1;
         0.0 <= last_p.x && last_p.x <= 2000.0 && -5000.0 <= last_p.y && last_p.y <= -1000.0
     }
 
     fn moved(&self) -> bool {
-        if self.history.len() < 4 {
-            false
-        } else if self.distance(self.history[self.history.len() - 4]) > 25.0 {
-            true
-        } else {
-            false
+        for i in 1..self.history.len() {
+            if self.distance(self.history[self.history.len() - i].1) > 25.0 {
+                return true;
+            } else if i > 4 {
+                return false;
+            }
         }
+        return false;
     }
 }
 
 struct EventDetection;
 impl EventDetection {
-    fn detect(sequences: Vec<Vec<Point2>>) {
+    fn detect(sequences: Vec<(i32, Vec<Point2>)>) {
         let mut humans: Vec<Human> = vec![];
         let mut seq_result = 0;
         for i in 0..sequences.len() {
+	    let t = sequences[i].0;
+            let ref sequence_data = sequences[i].1;
             for mut h in &mut humans {
                 h.detected = false;
             }
-            for point in &sequences[i] {
+            for point in sequence_data {
                 let mut used = false;
                 for mut h in &mut humans {
-                    if h.push_if_near(*point) {
+                    if h.push_if_near(t, *point) {
                         used = true;
                     }
                 }
                 if !used {
                     let mut new_man = Human::new();
-                    new_man.history.push(Point2 {
+                    new_man.history.push((t, Point2 {
                         x: point.x,
                         y: point.y,
-                    });
+                    }));
                     humans.push(new_man);
                 }
             }
@@ -125,6 +128,7 @@ impl EventDetection {
 fn main() {
     let mut sequences = vec![];
     let mut buffer = String::new();
+    let mut last_detected_at = 0;
     loop {
         match io::stdin().read_line(&mut buffer) {
             Ok(l) if l == 0 => break,
@@ -143,11 +147,12 @@ fn main() {
             };
             data.push(p);
         }
-        sequences.push(data);
-        if sequences.len() >= 40 {
-            print!("{}", t);
+        sequences.push((t, data));
+        if t - last_detected_at >= 1000 {
+            print!("{} {}", t, sequences.len());
             EventDetection::detect(sequences);
             sequences = vec![];
+            last_detected_at = t;
         }
     }
 }
